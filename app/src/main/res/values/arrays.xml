@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="NibpCtlSpingarr">
+        <item>开始</item>
+        <item>停止</item>
+        <item>5分钟</item>
+        <item>10分钟</item>
+        <item>15分钟</item>
+    </string-array>
+</resources>

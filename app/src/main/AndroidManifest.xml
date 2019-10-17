@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.ljfth.ecgviewlib">
+
+
+<uses-feature android:name="android.hardware.usb.host" />
+
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"></uses-permission>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" ></uses-permission>
+    <uses-permission android:name="android.permission.INTERNET"></uses-permission>
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AppMain">
+        <activity
+            android:name=".MainActivity"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.AppMain">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_DETACHED" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_DETACHED"
+                android:resource="@xml/device_filter" />
+        </activity>
+        <activity
+            android:name=".AboutActivity"
+            android:screenOrientation="landscape" />
+        <activity
+            android:name=".PatientInfoActivity"
+            android:screenOrientation="landscape" />
+        <activity
+            android:name=".ResetActivity"
+            android:screenOrientation="landscape" />
+        <activity
+            android:name=".ParamSettingActivity"
+            android:screenOrientation="landscape" />
+        <activity android:name=".SaveActivity"
+            android:screenOrientation="landscape" />
+        <activity android:name=".DevicesActivity"
+            android:screenOrientation="landscape" />
+
+        <service android:name=".base.UsbService" />
+
+        <receiver android:name=".BackUsing.LifeSingUpdateReceiver"/>
+    </application>
+
+</manifest>
