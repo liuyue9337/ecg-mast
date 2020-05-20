@@ -5,5 +5,8 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:fitsSystemWindows">true</item>
     </style>
-
+    <style name="SpinnerEcgChannel" parent="Widget.AppCompat.Light.DropDownItem.Spinner">
+        <item name="android:textColor">#00FF00</item>
+        <item name="android:textSize">12sp</item>
+    </style>
 </resources>

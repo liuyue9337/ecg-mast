@@ -13,6 +13,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.algorithm4.library.algorithm4library.Algorithm4Library;
+import com.algorithm4.library.algorithm4library.Algorithm4SensorLib;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.ljfth.ecgviewlib.adapter.DevicesListAdapter;
 import com.ljfth.ecgviewlib.base.BaseActivity;
@@ -43,7 +44,8 @@ public class DevicesActivity extends BaseActivity implements DevicesListAdapter.
             switch (msg.what) {
                 case 1:
                     byte[] trabsfer = new byte[256];
-                    boolean bool =  Algorithm4Library.GetCmdResult(mCurrentType, trabsfer);
+                    //boolean bool =  Algorithm4Library.GetCmdResult(mCurrentType, trabsfer);
+                    boolean bool =  Algorithm4SensorLib.GetCmdResult(mCurrentType, trabsfer);
                     Log.e("ecg", "==============返回指令===========" + trabsfer[0] + " index1 : " + Integer.toHexString(trabsfer[1] & 0xFF));
                     mTitle.setText("返回结果：：：：：：：：" + trabsfer[0] + " type is " + mCurrentType);
                     DealResultData(mCurrentType, trabsfer);
@@ -266,7 +268,8 @@ public class DevicesActivity extends BaseActivity implements DevicesListAdapter.
             }
         }
 
-        Algorithm4Library.GeneralCmd4Dev(mCurrentType, transfer);
+        //Algorithm4Library.GeneralCmd4Dev(mCurrentType, transfer);
+        Algorithm4SensorLib.GeneralCmd4Dev(mCurrentType, transfer);
 
         if (transfer[0] > 0 && transfer[0] < 256) {
             byte[] Send = new byte[transfer[0]];

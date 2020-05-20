@@ -1,13 +1,17 @@
 package com.ljfth.ecgviewlib.BackUsing;
 
 import android.os.Environment;
+import android.os.Message;
 import android.provider.ContactsContract;
+import android.support.constraint.solver.widgets.ConstraintAnchor;
 import android.util.ArrayMap;
 import android.util.Log;
 import android.widget.Toast;
 
 import com.algorithm4.library.algorithm4library.Algorithm4Library;
+import com.algorithm4.library.algorithm4library.Algorithm4SensorLib;
 import com.ljfth.ecgviewlib.Constant;
+import com.ljfth.ecgviewlib.EcgWaveView;
 import com.ljfth.ecgviewlib.base.BaseActivity;
 
 import org.greenrobot.eventbus.EventBus;
@@ -19,6 +23,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Set;
@@ -105,23 +110,638 @@ public class CMyDeamonProcess implements Runnable {
         final int SampledBufferLen = 256;
         double sampledData[][] = new double[CSingleInstance.getInstance().SampledDataTypeMax][SampledBufferLen];
         double sampleDataLen[] = new double[CSingleInstance.getInstance().SampledDataTypeMax];
-        Algorithm4Library.getSampledData(sampledData, sampleDataLen);
+        //Algorithm4Library.getSampledData(sampledData, sampleDataLen);
+    }
+
+    byte[] tempSensorMac = new byte[6];
+    byte[] spo2SensorMac = new byte[6];
+    byte[] ecgSensorMac = new byte[6];
+    byte[] nibpSensorMac = new byte[6];
+    byte[] hpmsSensorMac = new byte[6];
+    final int SampledBufferLen = 1024;
+    double sampledData[] = new double[SampledBufferLen*6];  //只获取（ECG-I, ECG-II, ECG-V, Resp, SpO2-IR)5种波形
+    CSingleInstance gTransferData = CSingleInstance.getInstance();
+
+    public byte[] getNibpSensorMac() {
+        return nibpSensorMac;
+    }
+
+    public byte[] getHpmsSensorMac() {
+        return hpmsSensorMac;
+    }
+
+    void analysisSensorMsg() {
+        byte sensorMsg[] = new  byte[256];
+        Algorithm4SensorLib.GetSensorMsg(sensorMsg);
+        int nBaseLen = 7;
+        int nValidDataStart = 1;
+        for (int i = 0; i < sensorMsg[0] / nBaseLen; i++) {
+            int nDevType = sensorMsg[i * nBaseLen + 6 + nValidDataStart];
+            switch (nDevType) {
+                case Constant.BLE_DEV_TEMP:
+                {
+                    System.arraycopy(sensorMsg, i * nBaseLen + nValidDataStart, tempSensorMac, 0, 6);
+                }break;
+                case Constant.BLE_DEV_SPO2:
+                {
+                    System.arraycopy(sensorMsg, i * nBaseLen + nValidDataStart, spo2SensorMac, 0, 6);
+                }break;
+                case Constant.BLE_DEV_ECG:
+                {
+                    System.arraycopy(sensorMsg, i * nBaseLen + nValidDataStart, ecgSensorMac, 0, 6);
+                }break;
+                case Constant.BLE_DEV_NIBP:
+                {
+                    System.arraycopy(sensorMsg, i * nBaseLen + nValidDataStart, nibpSensorMac, 0, 6);
+                }break;
+                case Constant.BLE_DEV_HPMS:
+                {
+                    System.arraycopy(sensorMsg, i * nBaseLen + nValidDataStart, hpmsSensorMac, 0, 6);
+                }break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    /**
+     * 判断传感器Mac地址是否有效
+     * @param sensorMac
+     * @return
+     */
+    boolean checkSensorIsValid(byte[] sensorMac) {
+        byte[] equal = new byte[6];
+        if (Arrays.equals(sensorMac, equal)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 设置目标采样率
+     */
+    void  setTargetSamplingRate() {
+        int[] nSampledRate = new int[32];
+
+        int nIndex = 1;
+        //GeneralData
+        if (checkSensorIsValid(hpmsSensorMac)) {
+            //多参设备优先
+            //心电
+            for (int i = 0; i < 6; i++) {
+                nSampledRate[nIndex++] = hpmsSensorMac[i];
+            }
+            nSampledRate[nIndex++] = Constant.VitalSignECG;
+            nSampledRate[nIndex++] = Constant.TagetSampled4Draw;
+            //呼吸
+            for (int i = 0; i < 6; i++) {
+                nSampledRate[nIndex++] = hpmsSensorMac[i];
+            }
+            nSampledRate[nIndex++] = Constant.VitalSignResp;
+            nSampledRate[nIndex++] = Constant.TagetSampled4Draw / 2;
+            //血氧
+            for (int i = 0; i < 6; i++) {
+                nSampledRate[nIndex++] = hpmsSensorMac[i];
+            }
+            nSampledRate[nIndex++] = Constant.VitalSignSPO2;
+            nSampledRate[nIndex++] = Constant.TagetSampled4Draw;
+        } else {
+            //单传感器设备
+            //心电
+            if (checkSensorIsValid(ecgSensorMac)) {
+                //心电
+                for (int i = 0; i < 6; i++) {
+                    nSampledRate[nIndex++] = ecgSensorMac[i];
+                }
+                nSampledRate[nIndex++] = Constant.VitalSignECG;
+                nSampledRate[nIndex++] = Constant.TagetSampled4Draw;
+                //呼吸
+                for (int i = 0; i < 6; i++) {
+                    nSampledRate[nIndex++] = ecgSensorMac[i];
+                }
+                nSampledRate[nIndex++] = Constant.VitalSignResp;
+                nSampledRate[nIndex++] = Constant.TagetSampled4Draw / 2;
+            }
+            //血氧
+            if (checkSensorIsValid(spo2SensorMac)){
+                for (int i = 0; i < 6; i++) {
+                    nSampledRate[nIndex++] = spo2SensorMac[i];
+                }
+                nSampledRate[nIndex++] = Constant.VitalSignSPO2;
+                nSampledRate[nIndex++] = Constant.TagetSampled4Draw;
+            }
+        }
+
+        nSampledRate[0] = nIndex - 1;
+        Algorithm4SensorLib.SetTargetSampling(nSampledRate);
+    }
+
+    /**
+     * 获取波形数据
+     */
+    void getSampledData() {
+        //GeneralData
+        sampledData[0] = 0;
+        int nIndex = 1;
+        int mIndex = 0;
+        if (checkSensorIsValid(hpmsSensorMac)) {
+            //多参设备优先
+            //心电
+            for (int i = 0; i < 6; i++) {
+                sampledData[nIndex * SampledBufferLen + mIndex++] = hpmsSensorMac[i] & 0xFF;
+            }
+            sampledData[nIndex * SampledBufferLen + mIndex++] = Constant.WaveTypeEcgI;
+            nIndex++;
+            mIndex = 0;
+
+            for (int i = 0; i < 6; i++) {
+                sampledData[nIndex * SampledBufferLen + mIndex++] = hpmsSensorMac[i] & 0xFF;
+            }
+            sampledData[nIndex * SampledBufferLen + mIndex++] = Constant.WaveTypeEcgII;
+            nIndex++;
+            mIndex = 0;
+
+            for (int i = 0; i < 6; i++) {
+                sampledData[nIndex * SampledBufferLen + mIndex++] = hpmsSensorMac[i] & 0xFF;
+            }
+            sampledData[nIndex * SampledBufferLen + mIndex++] = Constant.WaveTypeEcgV;
+            nIndex++;
+            mIndex = 0;
+
+            //呼吸
+            for (int i = 0; i < 6; i++) {
+                sampledData[nIndex * SampledBufferLen + mIndex++] = hpmsSensorMac[i] & 0xFF;
+            }
+            sampledData[nIndex * SampledBufferLen + mIndex++] = Constant.WaveTypeResp;
+            nIndex++;
+            mIndex = 0;
+
+            //血氧
+            for (int i = 0; i < 6; i++) {
+                sampledData[nIndex * SampledBufferLen + mIndex++] = hpmsSensorMac[i] & 0xFF;
+            }
+            sampledData[nIndex * SampledBufferLen + mIndex++] = Constant.WaveTypeIred;
+            nIndex++;
+            mIndex = 0;
+
+            sampledData[0] = nIndex - 1;
+        } else {
+            if (checkSensorIsValid(ecgSensorMac)) {
+                //心电
+                for (int i = 0; i < 6; i++) {
+                    sampledData[nIndex * SampledBufferLen + mIndex++] = ecgSensorMac[i] & 0xFF;
+                }
+                sampledData[nIndex * SampledBufferLen + mIndex++] = Constant.WaveTypeEcgI;
+                nIndex++;
+                mIndex = 0;
+
+                for (int i = 0; i < 6; i++) {
+                    sampledData[nIndex * SampledBufferLen + mIndex++] = ecgSensorMac[i] & 0xFF;
+                }
+                sampledData[nIndex * SampledBufferLen + mIndex++] = Constant.WaveTypeEcgII;
+                nIndex++;
+                mIndex = 0;
+
+                for (int i = 0; i < 6; i++) {
+                    sampledData[nIndex * SampledBufferLen + mIndex++] = ecgSensorMac[i] & 0xFF;
+                }
+                sampledData[nIndex * SampledBufferLen + mIndex++] = Constant.WaveTypeEcgV;
+                nIndex++;
+                mIndex = 0;
+
+                //呼吸
+                for (int i = 0; i < 6; i++) {
+                    sampledData[nIndex * SampledBufferLen + mIndex++] = ecgSensorMac[i] & 0xFF;
+                }
+                sampledData[nIndex * SampledBufferLen + mIndex++] = Constant.WaveTypeResp;
+                nIndex++;
+                mIndex = 0;
+            }
+
+            //血氧
+            if (checkSensorIsValid(spo2SensorMac)) {
+                //呼吸
+                for (int i = 0; i < 6; i++) {
+                    sampledData[nIndex * SampledBufferLen + mIndex++] = spo2SensorMac[i] & 0xFF;
+                }
+                sampledData[nIndex * SampledBufferLen + mIndex++] = Constant.WaveTypeIred;
+                nIndex++;
+                mIndex = 0;
+            }
+
+            sampledData[0] = nIndex - 1;
+        }
+        Algorithm4SensorLib.getSampledData(sampledData);
+        getValidEcgWave();
+    }
+
+    /**
+     * 获取生命体征参数信息
+     */
+    void getValue() {
+        double[] dVitualSignVal = new double[256];
+        int nIndex = 1;
+
+        if (checkSensorIsValid(hpmsSensorMac)) {
+            //多参设备优先
+            //Hpms Temp
+            dVitualSignVal[nIndex++] = hpmsSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamTemp;
+            dVitualSignVal[nIndex++] = -1;
+            //Hpms HR
+            dVitualSignVal[nIndex++] = hpmsSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamHR;
+            dVitualSignVal[nIndex++] = -1;
+            //Hpms Resp
+            dVitualSignVal[nIndex++] = hpmsSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamRR;
+            dVitualSignVal[nIndex++] = -1;
+            //Hpms SpO2
+            dVitualSignVal[nIndex++] = hpmsSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamSpO2;
+            dVitualSignVal[nIndex++] = -1;
+            //Hpms BPM
+            dVitualSignVal[nIndex++] = hpmsSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamPR;
+            dVitualSignVal[nIndex++] = -1;
+            //Hpms PI
+            dVitualSignVal[nIndex++] = hpmsSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamPI;
+            dVitualSignVal[nIndex++] = -1;
+            //Hpms SBP
+            dVitualSignVal[nIndex++] = hpmsSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamSBP;
+            dVitualSignVal[nIndex++] = -1;
+            //Hpms DBP
+            dVitualSignVal[nIndex++] = hpmsSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamDBP;
+            dVitualSignVal[nIndex++] = -1;
+            //Hpms ABP
+            dVitualSignVal[nIndex++] = hpmsSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = hpmsSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamABP;
+            dVitualSignVal[nIndex++] = -1;
+
+            dVitualSignVal[0] = nIndex - 1;
+        } else {
+            //Temp
+            dVitualSignVal[nIndex++] = tempSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = tempSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = tempSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = tempSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = tempSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = tempSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamTemp;
+            dVitualSignVal[nIndex++] = -2;
+            //HR
+            dVitualSignVal[nIndex++] = ecgSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = ecgSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = ecgSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = ecgSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = ecgSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = ecgSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamHR;
+            dVitualSignVal[nIndex++] = -2;
+            //Resp
+            dVitualSignVal[nIndex++] = ecgSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = ecgSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = ecgSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = ecgSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = ecgSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = ecgSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamRR;
+            dVitualSignVal[nIndex++] = -2;
+            //SpO2
+            dVitualSignVal[nIndex++] = spo2SensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamSpO2;
+            dVitualSignVal[nIndex++] = -2;
+            //BPM
+            dVitualSignVal[nIndex++] = spo2SensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamPR;
+            dVitualSignVal[nIndex++] = -2;
+            //PI
+            dVitualSignVal[nIndex++] = spo2SensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = spo2SensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamPI;
+            dVitualSignVal[nIndex++] = -2;
+            //SBP
+            dVitualSignVal[nIndex++] = nibpSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamSBP;
+            dVitualSignVal[nIndex++] = -2;
+            //DBP
+            dVitualSignVal[nIndex++] = nibpSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamDBP;
+            dVitualSignVal[nIndex++] = -2;
+            //ABP
+            dVitualSignVal[nIndex++] = nibpSensorMac[0] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[1] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[2] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[3] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[4] & 0xFF;
+            dVitualSignVal[nIndex++] = nibpSensorMac[5] & 0xFF;
+            dVitualSignVal[nIndex++] = Constant.VitalSignParamABP;
+            dVitualSignVal[nIndex++] = -2;
+
+            dVitualSignVal[0] = nIndex - 1;
+        }
+        Algorithm4SensorLib.getValue(dVitualSignVal);
+        //Algorithm4Library.getValue(gTransferData.m_dVitalSign);
+        nIndex = 1;
+        for (int i = 0; i < (int)(dVitualSignVal[0]) / 8; i++) {
+            gTransferData.m_dVitalSign[(int)dVitualSignVal[nIndex + 8 * i + 6]] = dVitualSignVal[nIndex + 8 * i + 7];
+        }
+    }
+
+    /**
+     * 确认有波形的心电数据通道
+     * @return
+     *  -1:处理，保持原来的状态
+     */
+    private int curValidEcgWaveChannel = -1;
+    private int curValidEcgWaveLen = -1;
+    void getValidEcgWave() {
+        int nIndex = 1;
+        int nLoop = (int)sampledData[0];
+        int nEcgI = 0, nEcgII = 0, nEcgV = 0;
+
+        for (int i = 0; i < nLoop; i++) {
+            int nType = (int) sampledData[(nIndex + i) * SampledBufferLen + 6];
+            int validLen = (int) (sampledData[(nIndex + i) * SampledBufferLen + 7]);
+            switch (nType) {
+                case Constant.WaveTypeEcgI:
+                    nEcgI = validLen;
+                    break;
+                case Constant.WaveTypeEcgII:
+                    nEcgII = validLen;
+                    break;
+                case Constant.WaveTypeEcgV:
+                    nEcgV = validLen;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        long subTime = System.currentTimeMillis() - gTransferData.disconnectTime;
+        if (nEcgII > 0) {
+            curValidEcgWaveChannel = Constant.WaveTypeEcgII;
+            curValidEcgWaveLen = nEcgII;
+            if (gTransferData.needAutoSelectEcgChannel && subTime > 500) {
+                gTransferData.needAutoSelectEcgChannel = false;
+                gTransferData.ecgChannelItem = 0;
+                gTransferData.ecgViewDataItem = gTransferData.SampledDataECGII;
+                //向MainActive发送消息
+                Message msg = new Message();
+                msg.what = 10; //AutoSelectEcgChannel = 10;
+                gTransferData.mainActiveHandler.sendMessage(msg);
+
+            }
+            //return Constant.WaveTypeEcgII;
+        } else if (nEcgI > 0) {
+            curValidEcgWaveChannel = Constant.WaveTypeEcgI;
+            if (gTransferData.needAutoSelectEcgChannel && subTime > 500) {
+                gTransferData.needAutoSelectEcgChannel = false;
+                gTransferData.ecgChannelItem = 1;
+                gTransferData.ecgViewDataItem = gTransferData.SampledDataECGI;
+                //向MainActive发送消息
+                Message msg = new Message();
+                msg.what = 10; //AutoSelectEcgChannel = 10;
+                gTransferData.mainActiveHandler.sendMessage(msg);
+            }
+            curValidEcgWaveLen = nEcgI;
+            //return Constant.WaveTypeEcgI;
+        } else if (nEcgV > 0) {
+            curValidEcgWaveChannel = Constant.WaveTypeEcgV;
+            curValidEcgWaveLen = nEcgV;
+            if (gTransferData.needAutoSelectEcgChannel && subTime > 500) {
+                gTransferData.needAutoSelectEcgChannel = false;
+                gTransferData.ecgViewDataItem = gTransferData.SampledDataECGV;
+                //向MainActive发送消息
+                Message msg = new Message();
+                msg.what = 10; //AutoSelectEcgChannel = 10;
+                gTransferData.mainActiveHandler.sendMessage(msg);
+            }
+            //return Constant.WaveTypeEcgV;
+        }
+        //return -1;
+    }
+
+    /**
+     * 处理心电波形数据
+     */
+    void dealEcgWaveData(int validLen, int nIndex, int i){
+
+        //由于此处要处理三个通道的波形数据，必须定位到第一个通道位置
+
+        switch (curValidEcgWaveChannel) {
+            case Constant.WaveTypeEcgI: {
+            } break;
+            case Constant.WaveTypeEcgII: {
+                i = i - 1;
+            } break;
+            case Constant.WaveTypeEcgV: {
+                i = i - 2;
+            } break;
+        }
+
+        //                                Log.i("bodystm", "ECG I len is " + String.valueOf(validLen));
+//                                System.arraycopy(sampledData, (int)((nIndex + i) * SampledBufferLen + 7), gTransferData.sampledData[gTransferData.SampledDataECGI], 0, validLen + 1);
+        int nWriteIndex = 0;
+        int nLen = 0;
+//                                    String print = "";
+        for (int j = 0; j < validLen; j++) {
+//                        Log.e("bodystm ECG R ", "DeamonProcess ecg Len is " + sampledData[CSingleInstance.SampledDataECGI][0]);
+
+            //String strTmp = Double.toString(sampledData[gTransferData.SampledDataECGI][i]);
+            //print += strTmp + ", ";
+
+            nWriteIndex = gTransferData.m_atomECGWIndex.getAndAdd(0);
+            if ((int)(sampledData[(nIndex + i) * SampledBufferLen + 7]) > 0) {
+                gTransferData.m_dViewData[gTransferData.SampledDataECGI][nWriteIndex] = sampledData[(nIndex + i) * SampledBufferLen + 8 + j];
+            } else {
+                gTransferData.m_dViewData[gTransferData.SampledDataECGI][nWriteIndex] = 0.0f;
+            }
+            if ((int)(sampledData[(nIndex + i + 1) * SampledBufferLen + 7]) > 0) {
+                gTransferData.m_dViewData[gTransferData.SampledDataECGII][nWriteIndex] = sampledData[(nIndex + i + 1) * SampledBufferLen + 8 + j];
+            } else {
+                gTransferData.m_dViewData[gTransferData.SampledDataECGII][nWriteIndex] = 0.0f;
+            }
+            if ((int)(sampledData[(nIndex + i + 2) * SampledBufferLen + 7]) > 0) {
+                gTransferData.m_dViewData[gTransferData.SampledDataECGV][nWriteIndex] = sampledData[(nIndex + i + 2) * SampledBufferLen + 8 + j];
+            } else {
+                gTransferData.m_dViewData[gTransferData.SampledDataECGV][nWriteIndex] = 0.0f;
+            }
+            nWriteIndex++;
+            nWriteIndex %= CSingleInstance.ViewArrayLen;
+            gTransferData.m_atomECGWIndex.getAndSet(nWriteIndex);
+        }
+
+        //Show Data ECG I
+        // Log.e("DeamonProcess", "double Protocol : " + print);
+        //saveData4Test(print.getBytes());
+        gTransferData.m_atomECGWIndex.getAndSet(nWriteIndex);
+        nLen = gTransferData.m_atomECGLen.addAndGet(validLen);
+
+        //判断缓冲去长度大于绘图缓冲去长度，则认为绘图线程停止工作，将程度初始化为0，读写指针也初始化为0
+        if (nLen > CSingleInstance.ViewArrayLen) {
+            gTransferData.m_atomECGRIndex.getAndSet(0);
+            gTransferData.m_atomECGLen.getAndSet(0);
+            gTransferData.m_atomECGWIndex.getAndSet(0);
+        }
+    }
+
+    /**
+     * 处理呼吸波形数据
+     */
+    void dealRespWaveData(int validLen, int nIndex, int i) {
+//                                Log.i("bodystm", "Resp len is " + String.valueOf(validLen));
+        int nWriteIndex = 0;
+        int nLen = 0;
+        String print = "";
+        for (int j = 0; j < validLen; j++) {
+//                                        String strTmp = Double.toString(sampledData[gTransferData.SampledDataResp][i]);
+//                                        print += strTmp + ", ";
+
+            nWriteIndex = gTransferData.m_atomRespWIndex.getAndAdd(0);
+            gTransferData.m_dViewData[gTransferData.SampledDataResp][nWriteIndex] = sampledData[(nIndex + i) * SampledBufferLen + 8 + j];
+            nWriteIndex++;
+            nWriteIndex %= CSingleInstance.ViewArrayLen;
+            gTransferData.m_atomRespWIndex.getAndSet(nWriteIndex);
+        }
+        //saveData4Test(print.getBytes());
+        gTransferData.m_atomRespWIndex.getAndSet(nWriteIndex);
+        nLen = gTransferData.m_atomRespLen.addAndGet(validLen);
+
+        //判断缓冲去长度大于绘图缓冲去长度，则认为绘图线程停止工作，将程度初始化为0，读写指针也初始化为0
+        if (nLen > CSingleInstance.ViewArrayLen) {
+            gTransferData.m_atomRespRIndex.getAndSet(0);
+            gTransferData.m_atomRespLen.getAndSet(0);
+            gTransferData.m_atomRespWIndex.getAndSet(0);
+        }
+    }
+
+    /**
+     * 处理血氧红光波形数据
+     * @param validLen
+     * @param nIndex
+     * @param i
+     */
+    void dealSpO2IredWaveData(int validLen, int nIndex, int i) {
+//                                Log.i("bodystm", "Ired len is " + String.valueOf(validLen));
+        //System.arraycopy(sampledData, (int)((nIndex + i) * SampledBufferLen + 7), sampledData[gTransferData.SampledDataECGI], 0, validLen + 1);
+        //if ((int) (sampledData[CSingleInstance.SampledDataRed][0]) > 0) {
+//                    Log.e("bodystm SpO2 R ", "DeamonProcess SpO2 Len is " + sampledData[CSingleInstance.SampledDataRed][0]);
+        int nWriteIndex = 0;
+        int nLen = 0;
+        String print = "";
+        for (int j = 0; j < validLen; j++) {
+//                                        String strTmp = Double.toString(sampledData[gTransferData.SampledDataRed][i]);
+//                                        print += strTmp + ", ";
+            nWriteIndex = gTransferData.m_atomSpO2WIndex.getAndAdd(0);
+            //gTransferData.m_dViewData[gTransferData.SampledDataRed][nWriteIndex] = sampledData[(int)((nIndex + i) * SampledBufferLen + 8 + j)];
+            gTransferData.m_dViewData[gTransferData.SampledDataIred][nWriteIndex] = sampledData[(int)((nIndex + i) * SampledBufferLen + 8 + j)];
+            gTransferData.m_nViewDataSta[gTransferData.SampledDataIred][nWriteIndex] = 0;
+            nWriteIndex++;
+            nWriteIndex %= CSingleInstance.ViewArrayLen;
+            gTransferData.m_atomSpO2WIndex.getAndSet(nWriteIndex);
+        }
+//                                saveData4Test(print.getBytes());
+        gTransferData.m_atomSpO2WIndex.getAndSet(nWriteIndex);
+        nLen = gTransferData.m_atomSpO2Len.addAndGet(validLen);
+
+        //判断缓冲去长度大于绘图缓冲去长度，则认为绘图线程停止工作，将程度初始化为0，读写指针也初始化为0
+        if (nLen > CSingleInstance.ViewArrayLen) {
+            gTransferData.m_atomSpO2RIndex.getAndSet(0);
+            gTransferData.m_atomSpO2Len.getAndSet(0);
+            gTransferData.m_atomSpO2WIndex.getAndSet(0);
+        }
+        //   }
     }
 
     public void run() {
-        CSingleInstance gTransferData = CSingleInstance.getInstance();
         int nCurBuffLen = 0, nCurReadIndex = 0, nCurTailIndex = 0, nCurWriteIndex = 0;
         int nCurFileLen = 0, nCurFileReadIndex = 0;
 
-        final int SampledBufferLen = 256;
-        double sampledData[][] = new double[gTransferData.SampledDataTypeMax][SampledBufferLen];
-        double sampleDataLen[] = new double[gTransferData.SampledDataTypeMax];
+        final int SampledBufferLen = 1024;
+        //double sampledData[][] = new double[gTransferData.SampledDataTypeMax][SampledBufferLen];
+        //double sampleDataLen[] = new double[gTransferData.SampledDataTypeMax];
         byte[] tmpBuff = new byte[1024 * 512];
         Log.e("DeamonProcess", "run functoin is running ...  ");
 
         Date nowData = new Date();
 
         final int addDataMaxLen = 1024 * 2;
+
+        byte cmdTransfer[] = new  byte[256];
+
 
         while (true) {
 
@@ -159,11 +779,19 @@ public class CMyDeamonProcess implements Runnable {
                         //Log.e("DeamonProcess", "addRecvData1 tmpBuffLen " + tmpBuff.length + " Real Len " + nTailLen + "  " + e.toString() + " ReadIndex " + nCurReadIndex + " WriteIndexz " + nCurWriteIndex);
                         System.arraycopy(gTransferData.m_cRecvBuffer, nCurReadIndex, tmpBuff, 0, nTailLen);
                     }
-                    Algorithm4Library.addRecvData(tmpBuff, nTailLen);
-//                    Print2Hex(gTransferData.m_cRecvBuffer, nCurReadIndex, nTailLen);
+                    //add数据
+//                    Algorithm4Library.addRecvData(tmpBuff, nTailLen);
+                    Print2Hex(gTransferData.m_cRecvBuffer, nCurReadIndex, nTailLen);
+                    Algorithm4SensorLib.addRecvData(tmpBuff, nTailLen);
                     //Print2Hex(tmpBuff, 0, nTailLen);
-                    Algorithm4Library.getSampledData(sampledData, sampleDataLen);
-                    Algorithm4Library.getValue(gTransferData.m_dVitalSign);
+                    //获取Sensor信息
+                    analysisSensorMsg();
+                    //设置目标采样率
+                    setTargetSamplingRate();
+                    //获取波形数据
+                    getSampledData();
+                    //获取参数信息
+                    getValue();
 
 //                    byte[] trabsfer = new byte[256];
 //                    boolean bool =  Algorithm4Library.GetCmdResult(Constant.TYPE_SEARCH, trabsfer);
@@ -179,11 +807,20 @@ public class CMyDeamonProcess implements Runnable {
                         //Log.e("DeamonProcess", "addRecvData2 tmpBuffLen " + tmpBuff.length + " Real Len " + nCurBuffLen + "  " + e.toString() + " ReadIndex " + nCurReadIndex + " WriteIndexz " + nCurWriteIndex);
                         System.arraycopy(gTransferData.m_cRecvBuffer, nCurReadIndex, tmpBuff, 0, nCurBuffLen);
                     }
-                    Algorithm4Library.addRecvData(tmpBuff, nCurBuffLen);
-//                    Print2Hex(gTransferData.m_cRecvBuffer, nCurReadIndex, nCurBuffLen);
+                    //Algorithm4Library.addRecvData(tmpBuff, nCurBuffLen);
+                    Print2Hex(gTransferData.m_cRecvBuffer, nCurReadIndex, nCurBuffLen);
+                    Algorithm4SensorLib.addRecvData(tmpBuff, nCurBuffLen);
                     //Print2Hex(tmpBuff, 0, nCurBuffLen);
-                    Algorithm4Library.getSampledData(sampledData, sampleDataLen);
-                    Algorithm4Library.getValue(gTransferData.m_dVitalSign);
+                    //Algorithm4Library.getSampledData(sampledData, sampleDataLen);
+                    //Algorithm4Library.getValue(gTransferData.m_dVitalSign);
+                    //获取Sensor信息
+                    analysisSensorMsg();
+                    //设置目标采样率
+                    setTargetSamplingRate();
+                    //获取波形数据
+                    getSampledData();
+                    //获取参数信息
+                    getValue();
 
 //                    byte[] trabsfer = new byte[256];
 //                    boolean bool =  Algorithm4Library.GetCmdResult(Constant.TYPE_SEARCH, trabsfer);
@@ -206,8 +843,56 @@ public class CMyDeamonProcess implements Runnable {
                     */
                 }
 
-                int nSpO2BufferLen = 0, nECGBufferLen = 0, nRespBufferLen = 0;
                 //获得拿到的数据给绘图线程使用
+                int nSpO2BufferLen = 0, nECGBufferLen = 0, nRespBufferLen = 0;
+                int nIndex = 1;
+                int nLoop = (int)sampledData[0];
+                for (int i = 0; i < nLoop; i++) {
+                    int nType = (int)sampledData[(nIndex + i) * SampledBufferLen + 6];
+                    int validLen = (int)(sampledData[(nIndex + i) * SampledBufferLen + 7]);
+                    switch (nType) {
+                        case Constant.WaveTypeEcgI:
+                            if (validLen > 0) {
+                                if (curValidEcgWaveChannel == nType) {
+                                    dealEcgWaveData(validLen, nIndex, i);
+                                    nECGBufferLen = gTransferData.m_atomECGLen.addAndGet(0);
+                                }
+                            }
+                            break;
+                        case Constant.WaveTypeEcgII:
+                            if (validLen > 0) {
+                                if (curValidEcgWaveChannel == nType) {
+                                    dealEcgWaveData(validLen, nIndex, i);
+                                    nECGBufferLen = gTransferData.m_atomECGLen.addAndGet(0);
+                                }
+                            }
+                            break;
+                        case Constant.WaveTypeEcgV:
+                            if (validLen > 0) {
+                                if (curValidEcgWaveChannel == nType) {
+                                    dealEcgWaveData(validLen, nIndex, i);
+                                    nECGBufferLen = gTransferData.m_atomECGLen.addAndGet(0);
+                                }
+                            }
+                            break;
+                        case Constant.WaveTypeResp:
+                            if (validLen > 0) {
+                                dealRespWaveData(validLen, nIndex, i);
+                                nRespBufferLen = gTransferData.m_atomRespLen.addAndGet(0);
+                            }
+                            break;
+                        case Constant.WaveTypeIred:
+                            if (validLen > 0) {
+                                dealSpO2IredWaveData(validLen, nIndex, i);
+                                nSpO2BufferLen = gTransferData.m_atomSpO2Len.addAndGet(0);
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                /*
                 if ((int) (sampledData[CSingleInstance.SampledDataRed][0]) > 0) {
 //                    Log.e("bodystm SpO2 R ", "DeamonProcess SpO2 Len is " + sampledData[CSingleInstance.SampledDataRed][0]);
                     int nWriteIndex = 0;
@@ -304,6 +989,7 @@ public class CMyDeamonProcess implements Runnable {
                     }
                 }
                 nRespBufferLen = gTransferData.m_atomRespLen.addAndGet(0);
+                 */
 
                 Date tmpData = new Date();
                 if (nowData.getTime() + 500 < tmpData.getTime()) {

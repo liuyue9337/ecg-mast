@@ -16,6 +16,7 @@ import android.util.Log;
 import android.widget.Toast;
 
 import com.algorithm4.library.algorithm4library.Algorithm4Library;
+import com.algorithm4.library.algorithm4library.Algorithm4SensorLib;
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.hoho.android.usbserial.driver.UsbSerialProber;
@@ -77,8 +78,8 @@ public class UsbService extends Service {
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         registerReceiver(mReceiver, filter);
 
-        Algorithm4Library.InitSingleInstance();
-
+        //Algorithm4Library.InitSingleInstance();
+        Algorithm4SensorLib.InitSingleInstance();
         connection();
 
     }

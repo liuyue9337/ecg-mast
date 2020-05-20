@@ -38,6 +38,16 @@ public class Constant {
     // 报警使能
     public static final String SP_RING = "sp_ring";
 
+    // 服务器IP
+    public static final String SP_IP = "Server_Ip";
+
+    // 服务器Port
+    public static final String SP_PORT = "Server_Port";
+
+    public static final String ServerIp = "39.98.220.57";
+    public static final String ServerPort = "9099";
+
+
 
 
     public static final int SPO2TOP = 100;
@@ -97,6 +107,10 @@ public class Constant {
     public static final int TYPE_NIBP_Start = 8;
     /**NIBP停止测量*/
     public static final int TYPE_NIBP_Stop = 9;
+    /**HPMS-NIBP-Start,开始HPMS无创血压测量*/
+    public static final int TYPE_HPMS_NIBP_Start = 13;
+    /**HPMS-NIBP-Start,停止HPMS无创血压测量*/
+    public static final int TYPE_HPMS_NIBP_Stop = 14;
 
 
     public static final String DEVICES_TYPE_BODYSTMSPO2 = "0";    //血氧
@@ -116,4 +130,54 @@ public class Constant {
     public static final boolean ECG_FUNC_ENABLE = true;
     public static final boolean RESP_FUNC_ENABLE = true;
     public static final boolean NIBP_FUNC_ENABLE = true;
+
+    //传感器设备类型
+    public static final int BLE_DEV_TEMP = 0;
+    public static final int BLE_DEV_SPO2 = 1;
+    public static final int BLE_DEV_ECG = 2;
+    public static final int BLE_DEV_NIBP = 3;
+    public static final int BLE_DEV_HPMS = 4;
+    public static final int BLE_DEV_MONITOR = 5;
+    public static final int BLE_DEV_MAX = 6;
+
+    //生命体征参数类型
+    public static final int VitalSignTEMP = 0;	//温度
+    public static final int VitalSignSPO2 = 1;	//血氧
+    public static final int VitalSignECG = 2;	//心电
+    public static final int VitalSignResp = 3;	//呼吸
+    public static final int VitalSignNIBP = 4;	//无创血压
+    public static final int VitalSignIBP = 5;	//有创血压
+    public static final int VitalSignEtCO2 = 6;	//呼末二氧化碳
+
+    //波形类型
+    public static final int WaveTypeRed = 0;
+    public static final int WaveTypeIred = 1;
+    public static final int WaveTypeEcgI = 2;
+    public static final int WaveTypeEcgII = 3;
+    public static final int WaveTypeEcgIII = 4;
+    public static final int WaveTypeEcgV = 5;
+    public static final int WaveTypeEcgavR = 6;
+    public static final int WaveTypeEcgavF = 7;
+    public static final int WaveTypeEcgavL = 8;
+    public static final int WaveTypeResp = 9;
+    public static final int WaveTypeEtCO2 = 10;
+    public static final int WaveTypeIBP = 11;
+
+    //生命体征参数信息
+    public static final int VitalSignParamSpO2 = 0;		//血氧值
+    public static final int VitalSignParamPR = 1;		//脉率值
+    public static final int VitalSignParamPI = 2;		//灌度指数
+    public static final int VitalSignParamHR = 3;		//心率值
+    public static final int VitalSignParamRR = 4;		//呼吸率
+    public static final int VitalSignParamTemp = 5;		//体温
+    public static final int VitalSignParamSBP = 6;		//收缩压NIBP
+    public static final int VitalSignParamDBP = 7;		//舒张压NIBP
+    public static final int VitalSignParamABP = 8;		//平均压NIBP
+    public static final int VitalSignParamSBP4IBP = 9;		//收缩压IBP
+    public static final int VitalSignParamDBP4IBP = 10;		//舒张压IBP
+    public static final int VitalSignParamABP4IBP = 11;		//平均压IBP
+    public static final int VitalSignParamEtCO2 = 12;		//EtCO2
+    public static final int VitalSignParamFiCO2 = 13;		//FiCO2
+    public static final int VitalSignParamawRR = 14;		//awRR
+
 }

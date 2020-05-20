@@ -39,7 +39,7 @@ public class CMyTcpTransfer implements Runnable {
         }
     }
 
-    boolean getConnectedSta() {
+    public boolean getConnectedSta() {
         if (socket != null) {
             if (socket.isConnected()) {
                 return true;
@@ -51,7 +51,7 @@ public class CMyTcpTransfer implements Runnable {
         }
     }
 
-    void changeAddr(String ip, int port) {
+    public void changeAddr(String ip, int port) {
         m_ip = ip;
         m_port = port;
         setM_bReCnfTcp(true);
@@ -116,14 +116,14 @@ public class CMyTcpTransfer implements Runnable {
                     int nReadIndex = gTransferData.m_atomTcpBuffReadIndex.get();
                     int nTailLen = gTransferData.m_nTcpSendBuffLen - nReadIndex;
                     if (nSendLen >= nTailLen) {
-                        Log.e("bodystmLiuYue", "sendLen is " + nTailLen + ", nReadIndex is " + nReadIndex);
+//                        Log.e("bodystmLiuYue", "sendLen is " + nTailLen + ", nReadIndex is " + nReadIndex);
                         //只发送尾部字节，更新读指针为0，减少长度nTailLen
                         buffWriter.write(gTransferData.m_cTcpSendBuffer, nReadIndex, nTailLen);
                         gTransferData.m_atomTcpBuffReadIndex.set(0);
                         gTransferData.m_atomTcpBuffLen.getAndAdd(-nTailLen);
                     } else {
                         //发送当前所有数据
-                        Log.e("bodystmLiuYue", "sendLen is " + nSendLen + ", nReadIndex is " + nReadIndex);
+//                        Log.e("bodystmLiuYue", "sendLen is " + nSendLen + ", nReadIndex is " + nReadIndex);
                         buffWriter.write(gTransferData.m_cTcpSendBuffer, nReadIndex, nSendLen);
                         gTransferData.m_atomTcpBuffReadIndex.getAndAdd(nSendLen);
                         gTransferData.m_atomTcpBuffLen.getAndAdd(-nSendLen);
@@ -139,5 +139,21 @@ public class CMyTcpTransfer implements Runnable {
                 setM_bReCnfTcp(true);
             }
         }
+    }
+
+    public String getM_ip() {
+        return m_ip;
+    }
+
+    public void setM_ip(String m_ip) {
+        this.m_ip = m_ip;
+    }
+
+    public int getM_port() {
+        return m_port;
+    }
+
+    public void setM_port(int m_port) {
+        this.m_port = m_port;
     }
 }

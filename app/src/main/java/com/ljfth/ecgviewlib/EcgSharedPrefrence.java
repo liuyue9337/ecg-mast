@@ -310,4 +310,40 @@ public class EcgSharedPrefrence {
     public static boolean getRing(Context context) {
         return getPrefrence(context).getBoolean(Constant.SP_RING, false);
     }
+
+    /**
+     * 设置服务端IP
+     * @param context
+     * @param ip
+     */
+    public static void setServerIp(Context context, String ip) {
+        getPrefrence(context).edit().putString(Constant.SP_IP, TextUtils.isEmpty(ip) ? Constant.ServerIp : ip).apply();
+    }
+
+    /**
+     * 获取服务端端口
+     * @param context
+     * @return
+     */
+    public static String getServerIp(Context context) {
+        return getPrefrence(context).getString(Constant.SP_IP, Constant.ServerIp);
+    }
+
+    /**
+     * 设置服务端Port
+     * @param context
+     * @param port
+     */
+    public static void setServerPort(Context context, String port) {
+        getPrefrence(context).edit().putString(Constant.SP_PORT, TextUtils.isEmpty(port) ? Constant.ServerIp : port).apply();
+    }
+
+    /**
+     * 获取服务端Port
+     * @param context
+     * @return
+     */
+    public static String getServerPort(Context context) {
+        return getPrefrence(context).getString(Constant.SP_PORT, Constant.ServerPort);
+    }
 }

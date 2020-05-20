@@ -34,13 +34,16 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.Spinner;
+import android.widget.SpinnerAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.algorithm4.library.algorithm4library.Algorithm4Library;
+import com.algorithm4.library.algorithm4library.Algorithm4SensorLib;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.ljfth.ecgviewlib.BackUsing.CSingleInstance;
 import com.ljfth.ecgviewlib.base.BaseActivity;
@@ -103,10 +106,11 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
     private TextView mTextViewTempCtl;
     private TextView mTextViewNibpCtl;
     private Spinner mSpinnerNibpCtl;
+    private Spinner mSpinnerEcgChannel;
     private int mNibpCtlStopJump = 0;   //如果大于0，表示程序内部控制的停止，否则为外部按钮控制的停止
     private TextView spo2View;
 
-    private String mVersionName = "1.7.5.2.KZ";
+    private String mVersionName = "1.7.9";
     private TextView mTextVersionShow;
 
 
@@ -136,6 +140,8 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
 
     //媒体播放器
     private MediaPlayer mediaPlayer = new MediaPlayer();
+    private String[] mItems;
+    private String[] mEcgChannalList;
 
     //Handler
     private final int RefreshView = 0;  //轮询一次刷新
@@ -145,10 +151,12 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
     private final int AdjustTimerSub = 5; //调整轮询间隔为实际调整值，减少Timer
     private final int SetDevSta = 6;    //设置界面状态信息
     private final int AdjustStatus = 7; //输出当前调整状态
+    private final int AutoSelectEcgChannel = 10; //自动选择有数据的ECG通道
 
     byte[] getCentorMac() {
         byte [] tmp = new byte[6];
-        Algorithm4Library.GetCentorMac(tmp);
+        //Algorithm4Library.GetCentorMac(tmp);
+        Algorithm4SensorLib.GetCentorMac(tmp);
         return tmp;
     }
 
@@ -240,6 +248,17 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                     spo2View.setText("High");
                 }
                 break;
+                case AutoSelectEcgChannel: {
+                    //选择Ecg通道
+                    if (gTransferData.ecgViewDataItem == gTransferData.SampledDataECGI) {
+                        mSpinnerEcgChannel.setSelection(0, true);
+                    } else if (gTransferData.ecgViewDataItem == gTransferData.SampledDataECGII) {
+                        mSpinnerEcgChannel.setSelection(1, true);
+                    } else if (gTransferData.ecgViewDataItem == gTransferData.SampledDataECGV) {
+                        mSpinnerEcgChannel.setSelection(2, true);
+                    }
+                }
+                break;
                 default:
                     break;
             }
@@ -251,6 +270,7 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
     private int nLastSBP = -1, nLastDBP = -1, nLastMBP = -1;
     private int nStateSaveCount = 0;    //确保某一个状态只执行一次
     private int nNibpStopIsFound = 0;
+    private boolean bNibpParamRefresh = false;  //决定血压的测量结果是否需要更新，false 不需要，true 需要
 
     private void RefreshVitalSignVal() {
         if (!bUSB_Sta) {
@@ -316,7 +336,7 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                     int nSBP = (int) (gTransferData.m_dVitalSign[CSingleInstance.VitalSignSBP]);
                     int nDBP = (int) (gTransferData.m_dVitalSign[CSingleInstance.VitalSignDBP]);
                     int nABP = (int) (gTransferData.m_dVitalSign[CSingleInstance.VitalSignABP]);
-                    //Log.i("liuyue", "SBP " + nSBP + ", DBP " + nDBP + ", ABP " + nABP);
+//                    Log.i("liuyue", "SBP " + nSBP + ", DBP " + nDBP + ", ABP " + nABP);
 //                    if (mSpinnerNibpCtl.getSelectedItem().toString().equals("停止")) {
 //                        if (!bLastNibpState) {
 //                            nDBP = -1;
@@ -349,6 +369,12 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                         nLastSBP = nSBP;
                         nLastDBP = nDBP;
                         nLastMBP = nABP;
+                    } else if (mTextViewNibpCtl.getText().toString().endsWith("ON") && mTextViewmmHg.getText().toString().endsWith("设备未连接")) {
+                        nDBP = -1;
+                        nSBP = 5;
+                        nLastSBP = nSBP;
+                        nLastDBP = nDBP;
+                        nLastMBP = nABP;
                     }
 
                     if (nDBP == -1) {
@@ -360,6 +386,8 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                                 bLastNibpState = false;
                                 nStateSaveCount = 0;
                                 nNibpStopIsFound = 0;
+                                //收到开始测量命令返回，需要刷新结果。
+                                bNibpParamRefresh = true;
                             }
                             break;
                             case 1: {
@@ -456,11 +484,14 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                                 break;
                         }
                     } else if (nDBP == 65535) {
-                        if (nNibpStopIsFound != 1) {
-                            mTextViewmmHg.setText("" + nSBP);
-                            mTextViewNibpMBP.setText("");
-                            bLastNibpState = false;
-                        }
+                        //if (nNibpStopIsFound != 1) {
+                        mTextViewmmHg.setText("" + nSBP);
+                        mTextViewNibpMBP.setText("");
+                        bLastNibpState = false;
+                        //收到实时数据时，需要刷新结果。
+                        bNibpParamRefresh = true;
+
+                        // }
                     } else {
                         mTextViewmmHg.setText((nSBP) + "/" + (nDBP));
                         mTextViewNibpMBP.setText("(" + nABP + ")");
@@ -468,10 +499,22 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
 //                        nLastSBP = nSBP2;
 //                        nLastDBP = nDBP2;
 //                        nLastMBP = nABP2;
+                        Log.e("liuyue", "=========mSpinnerNibpCtl.getSelectedItem().toString()========" + mSpinnerNibpCtl.getSelectedItem().toString());
                         if (mSpinnerNibpCtl.getSelectedItem().toString().equals("开始")
-                                && !mSpinnerNibpCtl.getSelectedItem().toString().equals("停止")) {
+                                && !mSpinnerNibpCtl.getSelectedItem().toString().equals("停止") && bNibpParamRefresh) {
                             mNibpCtlStopJump = 1;
-                            mSpinnerNibpCtl.setSelection(1);
+                            // 错误的，这个要你自定义
+                            SpinnerAdapter adapter = mSpinnerNibpCtl.getAdapter();
+
+//                            // 建立数据源
+//
+//                            // 建立Adapter并且绑定数据源
+                            //ArrayAdapter<String> _Adapter=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item, mItems);
+//                            //绑定 Adapter到控件
+                           // mSpinnerNibpCtl.setAdapter(_Adapter);
+                            mSpinnerNibpCtl.setSelection(1, true);
+//                            mSpinnerNibpCtl.clearAnimation();
+                            bNibpParamRefresh = false;
                         }
                     }
                 }
@@ -493,6 +536,9 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
 
     boolean m_bMyTimerTaskRunningFlag = true;
 
+    //记录HPMS设备连接状态，区别血压发送指令类型
+    private boolean bHpmsIsConnected = false;
+
     class MyTimerTask extends TimerTask {
         @Override
         public void run() {
@@ -502,7 +548,15 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                     lLastTime = System.currentTimeMillis();
                     //构建指令的预备数据
                     byte[] transfer = new byte[256];
-                    Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                    //Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                    byte[] nibpSensorMac = gTransferData.m_MyDeamonProcess.getNibpSensorMac();
+                    byte[] hpmsSensorMac = gTransferData.m_MyDeamonProcess.getHpmsSensorMac();
+                    if (bHpmsIsConnected) {
+                        System.arraycopy(hpmsSensorMac, 0, transfer, 0, 6);
+                    } else {
+                        System.arraycopy(nibpSensorMac, 0, transfer, 0, 6);
+                    }
+                    Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
                     if (transfer[0] > 0 && transfer[0] < 256) {
                         byte[] Send = new byte[transfer[0]];
                         System.arraycopy(transfer, 1, Send, 0, transfer[0]);
@@ -522,7 +576,15 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                     lLastTime = System.currentTimeMillis();
                     //构建指令的预备数据
                     byte[] transfer = new byte[256];
-                    Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                    //Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                    byte[] nibpSensorMac = gTransferData.m_MyDeamonProcess.getNibpSensorMac();
+                    byte[] hpmsSensorMac = gTransferData.m_MyDeamonProcess.getHpmsSensorMac();
+                    if (bHpmsIsConnected) {
+                        System.arraycopy(hpmsSensorMac, 0, transfer, 0, 6);
+                    } else {
+                        System.arraycopy(nibpSensorMac, 0, transfer, 0, 6);
+                    }
+                    Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
                     if (transfer[0] > 0 && transfer[0] < 256) {
                         byte[] Send = new byte[transfer[0]];
                         System.arraycopy(transfer, 1, Send, 0, transfer[0]);
@@ -542,7 +604,15 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                     lLastTime = System.currentTimeMillis();
                     //构建指令的预备数据
                     byte[] transfer = new byte[256];
-                    Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                    //Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                    byte[] nibpSensorMac = gTransferData.m_MyDeamonProcess.getNibpSensorMac();
+                    byte[] hpmsSensorMac = gTransferData.m_MyDeamonProcess.getHpmsSensorMac();
+                    if (bHpmsIsConnected) {
+                        System.arraycopy(hpmsSensorMac, 0, transfer, 0, 6);
+                    } else {
+                        System.arraycopy(nibpSensorMac, 0, transfer, 0, 6);
+                    }
+                    Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
                     if (transfer[0] > 0 && transfer[0] < 256) {
                         byte[] Send = new byte[transfer[0]];
                         System.arraycopy(transfer, 1, Send, 0, transfer[0]);
@@ -638,13 +708,13 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                             int nSubLen = nLenECG - Constant.TagetSampled4Draw * 2;
                             nReadIndexECG += nSubLen;
                             nReadIndexECG %= CSingleInstance.ViewArrayLen;
-                            nNewY = (int) (gTransferData.m_dViewData[gTransferData.SampledDataECGII][nReadIndexECG]);
+                            nNewY = (int) (gTransferData.m_dViewData[gTransferData.ecgViewDataItem][nReadIndexECG]);
                             gTransferData.m_atomECGRIndex.getAndSet(nReadIndexECG);
                             gTransferData.m_atomECGLen.getAndAdd(-nSubLen);
                         } else {
                             nReadIndexECG++;
                             nReadIndexECG %= CSingleInstance.ViewArrayLen;
-                            nNewY = (int) (gTransferData.m_dViewData[gTransferData.SampledDataECGII][nReadIndexECG]);
+                            nNewY = (int) (gTransferData.m_dViewData[gTransferData.ecgViewDataItem][nReadIndexECG]);
                             gTransferData.m_atomECGRIndex.getAndSet(nReadIndexECG);
                             gTransferData.m_atomECGLen.getAndAdd(-1);
                         }
@@ -903,11 +973,11 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                 //发现buffer在降低，适当填充点满足协调统一
                 if ((timeNow - ECGAdjustTime > AdjustOverTime) || (nECGAdjustCount > Constant.TagetSampled4Draw / 10)) {
                     int nReadIndexECG = gTransferData.m_atomECGRIndex.getAndAdd(0);
-                    int nNowValY = (int) (gTransferData.m_dViewData[gTransferData.SampledDataECGII][(nReadIndexECG) % CSingleInstance.ViewArrayLen]);
+                    int nNowValY = (int) (gTransferData.m_dViewData[gTransferData.ecgViewDataItem][(nReadIndexECG) % CSingleInstance.ViewArrayLen]);
                     nReadIndexECG = (nReadIndexECG + CSingleInstance.ViewArrayLen - 1) % CSingleInstance.ViewArrayLen;
                     //修改该点的值为斜率计算结果
-                    int nLastValY = (int) (gTransferData.m_dViewData[gTransferData.SampledDataECGII][nReadIndexECG]);
-                    gTransferData.m_dViewData[gTransferData.SampledDataECGII][nReadIndexECG] = (nNowValY + nLastValY) / 2;
+                    int nLastValY = (int) (gTransferData.m_dViewData[gTransferData.ecgViewDataItem][nReadIndexECG]);
+                    gTransferData.m_dViewData[gTransferData.ecgViewDataItem][nReadIndexECG] = (nNowValY + nLastValY) / 2;
                     gTransferData.m_atomECGRIndex.getAndSet(nReadIndexECG);
                     gTransferData.m_atomECGLen.getAndAdd(1);
                     ECGAdjustTime = timeNow;
@@ -1094,11 +1164,11 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                 //发现buffer在降低，适当填充点满足协调统一
                 if ((timeNow - ECGAdjustTime > AdjustOverTime) || (nECGAdjustCount > Constant.TagetSampled4Draw / 10)) {
                     int nReadIndexECG = gTransferData.m_atomECGRIndex.getAndAdd(0);
-                    int nNowValY = (int) (gTransferData.m_dViewData[gTransferData.SampledDataECGII][(nReadIndexECG) % CSingleInstance.ViewArrayLen]);
+                    int nNowValY = (int) (gTransferData.m_dViewData[gTransferData.ecgViewDataItem][(nReadIndexECG) % CSingleInstance.ViewArrayLen]);
                     nReadIndexECG = (nReadIndexECG + CSingleInstance.ViewArrayLen - 1) % CSingleInstance.ViewArrayLen;
                     //修改该点的值为斜率计算结果
-                    int nLastValY = (int) (gTransferData.m_dViewData[gTransferData.SampledDataECGII][nReadIndexECG]);
-                    gTransferData.m_dViewData[gTransferData.SampledDataECGII][nReadIndexECG] = (nNowValY + nLastValY) / 2;
+                    int nLastValY = (int) (gTransferData.m_dViewData[gTransferData.ecgViewDataItem][nReadIndexECG]);
+                    gTransferData.m_dViewData[gTransferData.ecgViewDataItem][nReadIndexECG] = (nNowValY + nLastValY) / 2;
                     gTransferData.m_atomECGRIndex.getAndSet(nReadIndexECG);
                     gTransferData.m_atomECGLen.getAndAdd(1);
                     ECGAdjustTime = timeNow;
@@ -1391,7 +1461,8 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
 
     private void DealDevConSta() {
         byte[] transfer = new byte[256];
-        Algorithm4Library.GetCmdResult(Constant.TYPE_DETECTION, transfer);
+        //Algorithm4Library.GetCmdResult(Constant.TYPE_DETECTION, transfer);
+        Algorithm4SensorLib.GetCmdResult(Constant.TYPE_DETECTION, transfer);
 
         String print = "";
         if (transfer.length >= 0) {
@@ -1477,7 +1548,8 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
 
     private void DealDevConStaExt() {
         byte[] transfer = new byte[256];
-        Algorithm4Library.GetCmdResult(Constant.TYPE_NET_HEART, transfer);
+        //Algorithm4Library.GetCmdResult(Constant.TYPE_NET_HEART, transfer);
+        Algorithm4SensorLib.GetCmdResult(Constant.TYPE_NET_HEART, transfer);
 
         int nDevMsgBaseLen = 10;
         boolean bEcg = false, bSpO2 = false, bTemp = false, bNIBP = false, bHPMS = false;
@@ -1538,8 +1610,17 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
 //            System.out.printf("Dev Type %d, Strength %d, UUID %04X, DevMac %02X%02X%02X%02X%02X%02X\n", nDevType, nSigStrength, nUUID, DevMac[0], DevMac[1], DevMac[2], DevMac[3], DevMac[4], DevMac[5]);
         }
 
+        if (bHPMS) {
+            bEcg = true;
+            bSpO2 = true;
+            bTemp = true;
+            bNIBP = true;
+        }
+//        bHPMS = false;
+        bHpmsIsConnected = bHPMS;
+
         //血氧
-        if (bSpO2 == false) {
+        if (bSpO2 == false && bHPMS == false) {
             //连接失败
             mTextViewSpO2Ctl.setText("SpO2 OFF");
             lastSpo2Con = 0;
@@ -1554,7 +1635,7 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
         }
 
         //心电
-        if (bEcg == false) {
+        if (bEcg == false && bHPMS == false) {
             //连接失败
             lastECGCon = 0;
             mTextViewEcgCtl.setText("ECG OFF");
@@ -1577,7 +1658,7 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
         }
 
         //温度
-        if (bTemp == false) {
+        if (bTemp == false && bHPMS == false) {
             //连接失败
             lastTempCon = 0;
             mTextViewTempCtl.setText("Temp OFF");
@@ -1610,6 +1691,10 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
     @Override
     protected void initWidget() {
         super.initWidget();
+
+        //记录handle到全局变量
+        CSingleInstance.getInstance().mainActiveHandler = handler;
+
         mTitleTextView = (TextView) findViewById(R.id.text_usb);
         mTextViewRate = (TextView) findViewById(R.id.graph_father1_data_text_left);
         mTextViewBPM = (TextView) findViewById(R.id.graph_father1_data_text_right);
@@ -1626,6 +1711,10 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
         if (Constant.NIBP_FUNC_ENABLE) {
             mTextViewNibpCtl = (TextView) findViewById(R.id.NIBP_Ctl);
             mSpinnerNibpCtl = (Spinner) findViewById(R.id.graph_father3_data_ctl);
+            mItems = getResources().getStringArray(R.array.NibpCtlSpingarr);
+            ArrayAdapter<String> _Adapter=new ArrayAdapter<String>(this,R.layout.item_spinner_layout_nibp, mItems);
+            //绑定 Adapter到控件
+            mSpinnerNibpCtl.setAdapter(_Adapter);
             mSpinnerNibpCtl.setSelection(1, true);
             mSpinnerNibpCtl.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
                 @Override
@@ -1642,15 +1731,25 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
 //                    } catch (Exception e) {
 //                        e.printStackTrace();
 //                    }
-
+                    String curText = mSpinnerNibpCtl.getSelectedItem().toString();
+                    //tring curText = mItems[position];
+                    Log.i("liuyue", curText);
                     //记录下血压测量按钮的状态，在Activity启动时恢复状态
                     gTransferData.m_nNibpCtlPosition = position;
+                    byte[] nibpSensorMac = gTransferData.m_MyDeamonProcess.getNibpSensorMac();
+                    byte[] hpmsSensorMac = gTransferData.m_MyDeamonProcess.getHpmsSensorMac();
                     switch (position) {
                         case 0: {
                             //开始测量
                             //构建指令的预备数据
                             byte[] transfer = new byte[256];
-                            Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                            //Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                            if (bHpmsIsConnected) {
+                                System.arraycopy(hpmsSensorMac, 0, transfer, 0, 6);
+                            } else {
+                                System.arraycopy(nibpSensorMac, 0, transfer, 0, 6);
+                            }
+                            Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
                             if (transfer[0] > 0 && transfer[0] < 256) {
                                 byte[] Send = new byte[transfer[0]];
                                 System.arraycopy(transfer, 1, Send, 0, transfer[0]);
@@ -1677,15 +1776,22 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                                 Log.i("liuyue", "NIBP Stop , running !!!!");
 
                                 byte[] transfer = new byte[256];
-                                Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Stop, transfer);
+//                                Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Stop, transfer);
+                                System.arraycopy(nibpSensorMac, 0, transfer, 0, 6);
+                                if (bHpmsIsConnected) {
+                                    System.arraycopy(hpmsSensorMac, 0, transfer, 0, 6);
+                                } else {
+                                    System.arraycopy(nibpSensorMac, 0, transfer, 0, 6);
+                                }
+                                Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPE_NIBP_Stop, transfer);
                                 if (transfer[0] > 0 && transfer[0] < 256) {
                                     byte[] Send = new byte[transfer[0]];
                                     System.arraycopy(transfer, 1, Send, 0, transfer[0]);
 
                                     if (writeIoManage(Send) == true) {
-                                        System.out.printf("发送开始测量数据 ... %d bytes\n", transfer[0]);
+                                        System.out.printf("发送停止测量数据 ... %d bytes\n", transfer[0]);
                                     } else {
-                                        System.out.printf("发送开始测量数据 ... 失败\n");
+                                        System.out.printf("发送停止测量数据 ... 失败\n");
                                     }
                                 } else {
                                     //show error
@@ -1699,15 +1805,22 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                             lLastTime = System.currentTimeMillis();
                             //构建指令的预备数据
                             byte[] transfer = new byte[256];
-                            Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                            //Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                            System.arraycopy(nibpSensorMac, 0, transfer, 0, 6);
+                            if (bHpmsIsConnected) {
+                                System.arraycopy(hpmsSensorMac, 0, transfer, 0, 6);
+                            } else {
+                                System.arraycopy(nibpSensorMac, 0, transfer, 0, 6);
+                            }
+                            Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
                             if (transfer[0] > 0 && transfer[0] < 256) {
                                 byte[] Send = new byte[transfer[0]];
                                 System.arraycopy(transfer, 1, Send, 0, transfer[0]);
 
                                 if (writeIoManage(Send) == true) {
-                                    System.out.printf("发送开始测量数据 ... %d bytes\n", transfer[0]);
+                                    System.out.printf("发送开始测量数据 5 ... %d bytes\n", transfer[0]);
                                 } else {
-                                    System.out.printf("发送开始测量数据 ... 失败\n");
+                                    System.out.printf("发送开始测量数据 5Min... 失败\n");
                                 }
                             } else {
                                 //show error
@@ -1720,15 +1833,21 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                             lLastTime = System.currentTimeMillis();
                             //构建指令的预备数据
                             byte[] transfer = new byte[256];
-                            Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                            //Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                            System.arraycopy(nibpSensorMac, 0, transfer, 0, 6);
+                            if (bHpmsIsConnected) {
+                                Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPE_HPMS_NIBP_Start, transfer);
+                            } else {
+                                Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                            }
                             if (transfer[0] > 0 && transfer[0] < 256) {
                                 byte[] Send = new byte[transfer[0]];
                                 System.arraycopy(transfer, 1, Send, 0, transfer[0]);
 
                                 if (writeIoManage(Send) == true) {
-                                    System.out.printf("发送开始测量数据 ... %d bytes\n", transfer[0]);
+                                    System.out.printf("发送开始测量数据 10Min... %d bytes\n", transfer[0]);
                                 } else {
-                                    System.out.printf("发送开始测量数据 ... 失败\n");
+                                    System.out.printf("发送开始测量数据 10Min... 失败\n");
                                 }
                             } else {
                                 //show error
@@ -1741,15 +1860,21 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                             lLastTime = System.currentTimeMillis();
                             //构建指令的预备数据
                             byte[] transfer = new byte[256];
-                            Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                            //Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                            System.arraycopy(nibpSensorMac, 0, transfer, 0, 6);
+                            if (bHpmsIsConnected) {
+                                Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPE_HPMS_NIBP_Start, transfer);
+                            } else {
+                                Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPE_NIBP_Start, transfer);
+                            }
                             if (transfer[0] > 0 && transfer[0] < 256) {
                                 byte[] Send = new byte[transfer[0]];
                                 System.arraycopy(transfer, 1, Send, 0, transfer[0]);
 
                                 if (writeIoManage(Send) == true) {
-                                    System.out.printf("发送开始测量数据 ... %d bytes\n", transfer[0]);
+                                    System.out.printf("发送开始测量数据 15Min... %d bytes\n", transfer[0]);
                                 } else {
-                                    System.out.printf("发送开始测量数据 ... 失败\n");
+                                    System.out.printf("发送开始测量数据 15Min... 失败\n");
                                 }
                             } else {
                                 //show error
@@ -1769,6 +1894,41 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
             });
 
         }
+
+        mEcgChannalList = getResources().getStringArray(R.array.EcgChanneSpingarr);
+        mSpinnerEcgChannel = findViewById(R.id.graph_father2_Ecg_Channel_Spinner);
+        ArrayAdapter<String> ecgChannelAdapter=new ArrayAdapter<String>(this,R.layout.item_spinner_layout, mEcgChannalList);
+        //绑定 Adapter到控件
+        mSpinnerEcgChannel.setAdapter(ecgChannelAdapter);
+        mSpinnerEcgChannel.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                switch (position) {
+                    case 0:{
+                        gTransferData.ecgViewDataItem = gTransferData.SampledDataECGI;
+                    } break;
+                    case 1: {
+                        gTransferData.ecgViewDataItem = gTransferData.SampledDataECGII;
+                    } break;
+                    case 2: {
+                        gTransferData.ecgViewDataItem = gTransferData.SampledDataECGV;
+                    } break;
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+
+            }
+        });
+        if (gTransferData.ecgViewDataItem == gTransferData.SampledDataECGI) {
+            mSpinnerEcgChannel.setSelection(0, true);
+        } else if (gTransferData.ecgViewDataItem == gTransferData.SampledDataECGII) {
+            mSpinnerEcgChannel.setSelection(1, true);
+        } else if (gTransferData.ecgViewDataItem == gTransferData.SampledDataECGV) {
+            mSpinnerEcgChannel.setSelection(2, true);
+        }
+
         spo2View = (TextView) findViewById(R.id.graph_father1_left);
         mTextVersionShow = (TextView) findViewById(R.id.tv_version_name);
 
@@ -1791,17 +1951,18 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
             Constant.TagetSampled4Draw = pixelPerMM * 25;
         }
 
-        int[] SetTargetSampled = new int[7];
-        for (int i = 0; i < SetTargetSampled.length; i++) {
-            if (i != 2) {
-                SetTargetSampled[i] = Constant.TagetSampled4Draw;
-            } else {
-                SetTargetSampled[i] = Constant.TagetSampled4Draw / 2;
-            }
-        }
-        Algorithm4Library.SetTargetSampling(SetTargetSampled);
+        //设置采样率方法调整至addData方法后
+//        int[] SetTargetSampled = new int[7];
+//        for (int i = 0; i < SetTargetSampled.length; i++) {
+//            if (i != 2) {
+//                SetTargetSampled[i] = Constant.TagetSampled4Draw;
+//            } else {
+//                SetTargetSampled[i] = Constant.TagetSampled4Draw / 2;
+//            }
+//        }
+//        Algorithm4Library.SetTargetSampling(SetTargetSampled);
+//        Log.e("liuyue", ""+SetTargetSampled);
 
-        Log.e("liuyue", ""+SetTargetSampled);
         //init Timer
         //new Timer().schedule(m_TimerLoop, 100, (int)(1000.0f / ((25.0 * pixelPerMM) / 2)));
         DrawTimer = new Timer();
@@ -1813,6 +1974,7 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
         new Timer().schedule(new TimerTask() {
             int LoopState = 0;  //0:Search 1:Deal
 
+            //定时任务查询设备连接状态
             @Override
             public void run() {
                 byte[] transfer = new byte[256];
@@ -1821,7 +1983,8 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                     //发送查询命令
 //                    Log.e("SerialCheck", "Send .. ...");
                     LoopState = 1;
-                    Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_DETECTION, transfer);
+//                    Algorithm4Library.GeneralCmd4Dev(Constant.TYPE_DETECTION, transfer);
+                    Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPE_DETECTION, transfer);
                     if (transfer[0] > 0) {
                         byte[] send = new byte[transfer[0]];
                         System.arraycopy(transfer, 1, send, 0, transfer[0]);
@@ -2392,7 +2555,8 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
 
                 //Off Line SpO2
                 transfer[1] = SpO2Type;
-                Algorithm4Library.GeneralCmd4Dev(Constant.TYPW_DISC_ALL_DEV, transfer);
+                //Algorithm4Library.GeneralCmd4Dev(Constant.TYPW_DISC_ALL_DEV, transfer);
+                Algorithm4SensorLib.GeneralCmd4Dev(Constant.TYPW_DISC_ALL_DEV, transfer);
                 if (transfer[0] > 0) {
                     byte[] send = new byte[transfer[0]];
                     System.arraycopy(transfer, 1, send, 0, transfer[0]);
@@ -2464,6 +2628,12 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
         if (Constant.NIBP_FUNC_ENABLE) {
             mTextViewSpO2Ctl.setText("NIBP OFF");
         }
+
+        /*
+         断开连接后初始化，供CMyDeamonProcess类判断ECG波形使用
+         */
+        gTransferData.needAutoSelectEcgChannel = true;
+        gTransferData.disconnectTime = System.currentTimeMillis();
     }
 
     //清空绘图缓冲去
@@ -2501,7 +2671,7 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
 
 
     @OnClick({R.id.stv_patient_info, R.id.stv_device_attachment, R.id.stv_param_setting,
-            R.id.stv_save, R.id.stv_reset, R.id.stv_about, R.id.btn_test})
+            R.id.stv_save, R.id.stv_reset, R.id.stv_about, R.id.btn_test, R.id.btn_ipset})
     public void onViewClicked(View view) {
         switch (view.getId()) {
             case R.id.stv_patient_info:
@@ -2533,6 +2703,9 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                 //startActivity(new Intent(MainActivity.this, AboutActivity.class));
                 startActivity(new Intent(MainActivity.this, CSpO2Config.class));
                 break;
+            case R.id.btn_ipset:
+                startActivity(new Intent(MainActivity.this, IpsetActivity.class));
+                break;
         }
     }
 
@@ -2544,6 +2717,7 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
                 String name = EcgSharedPrefrence.getName(MainActivity.this);
                 String bedNum = EcgSharedPrefrence.getBedNum(MainActivity.this);
                 textTitle.setText(name + "  -  " + bedNum + "床");
+                textTitle.setText("铂元智能科技");
                 Constant.SAVE_PATH = getExternalCacheDir().getAbsolutePath() + "/" + name;
             } else if (TextUtils.equals(action, PatientInfoActivity.ACTION_CLEAR)) {
                 textTitle.setText("");

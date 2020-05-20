@@ -1,9 +1,11 @@
 package com.ljfth.ecgviewlib.BackUsing;
 
 import android.hardware.usb.UsbManager;
+import android.os.Handler;
 import android.util.Log;
 
 import com.algorithm4.library.algorithm4library.Algorithm4Library;
+import com.algorithm4.library.algorithm4library.Algorithm4SensorLib;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.hoho.android.usbserial.util.SerialInputOutputManager;
 
@@ -17,8 +19,8 @@ public class CSingleInstance {
     private static volatile CSingleInstance instance = null;
 
     private CSingleInstance() {
-        Algorithm4Library.InitSingleInstance();
-
+        //Algorithm4Library.InitSingleInstance();
+        Algorithm4SensorLib.InitSingleInstance();
         //初始化生命体征参数变量为-1
         for (int i = 0; i < m_dVitalSign4Record.length; i++) {
             m_dVitalSign4Record[i] = -1;
@@ -352,4 +354,17 @@ public class CSingleInstance {
     public AtomicInteger m_atomTcpBuffWriteIndex = new AtomicInteger(0);
     public AtomicInteger m_atomTcpBuffLen = new AtomicInteger(0);
     public byte[] m_cTcpSendBuffer = new byte[m_nTcpSendBuffLen];
+
+    //记录是否进行默认的通道选择（在设备连接后第一次有数据时选择有数据的Ecg通道）
+    public boolean needAutoSelectEcgChannel = true;
+    public long disconnectTime = System.currentTimeMillis();
+    //记录心电通道选择下拉item
+    public int ecgChannelItem = 0;
+    //心电通道下拉对应的绘图m_dViewData选择
+    public int ecgViewDataItem = SampledDataECGII;
+
+    public Handler mainActiveHandler = null;
+
+
+
 }

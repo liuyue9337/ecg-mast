@@ -33,6 +33,7 @@ import com.ljfth.ecgviewlib.BackUsing.CMyDeamonProcess;
 import com.ljfth.ecgviewlib.BackUsing.CMyTcpTransfer;
 import com.ljfth.ecgviewlib.BackUsing.CSingleInstance;
 import com.ljfth.ecgviewlib.BackUsing.LifeSignParamRecord;
+import com.ljfth.ecgviewlib.EcgSharedPrefrence;
 import com.ljfth.ecgviewlib.MainActivity;
 
 import org.greenrobot.eventbus.EventBus;
@@ -136,7 +137,12 @@ public abstract class BaseActivity extends AppCompatActivity {
 		//开启后台守护进程，准备好Tcp连接服务
 		if (gTransferData.m_MyTcpTransfer == null) {
 			gTransferData.m_MyTcpTransfer = new CMyTcpTransfer();
-			Log.i("TcpTransfer", "m_MyTcpTransfer is running ... ..." + gTransferData.m_MyTcpTransfer.toString());
+			//初始化Ip和Port
+			String ip = EcgSharedPrefrence.getServerIp(this);
+			String port = EcgSharedPrefrence.getServerPort(this);
+			gTransferData.m_MyTcpTransfer.setM_ip(ip);
+			gTransferData.m_MyTcpTransfer.setM_port(Integer.parseInt(port));
+			Log.i("TcpTransfer", "m_MyTcpTransfer is running ... ..." + gTransferData.m_MyTcpTransfer.toString()+"\n 启动IP:Port is " + ip + ":" + port);
 			new Thread(gTransferData.m_MyTcpTransfer).start();
 			try {
 				Thread.currentThread().sleep(200);
