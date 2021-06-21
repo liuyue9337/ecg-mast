@@ -2,10 +2,10 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/SuperTextView-library/SuperTextView-library.iml" filepath="$PROJECT_DIR$/SuperTextView-library/SuperTextView-library.iml" />
-      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
       <module fileurl="file://$PROJECT_DIR$/ecg-master.iml" filepath="$PROJECT_DIR$/ecg-master.iml" />
-      <module fileurl="file://$PROJECT_DIR$/usbSerialForAndroid/usbSerialForAndroid.iml" filepath="$PROJECT_DIR$/usbSerialForAndroid/usbSerialForAndroid.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/SuperTextView-library/ecg-master.SuperTextView-library.iml" filepath="$PROJECT_DIR$/.idea/modules/SuperTextView-library/ecg-master.SuperTextView-library.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/ecg-master.app.iml" filepath="$PROJECT_DIR$/.idea/modules/app/ecg-master.app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/usbSerialForAndroid/ecg-master.usbSerialForAndroid.iml" filepath="$PROJECT_DIR$/.idea/modules/usbSerialForAndroid/ecg-master.usbSerialForAndroid.iml" />
     </modules>
   </component>
 </project>
