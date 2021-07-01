@@ -1,0 +1,16 @@
+<component name="libraryTable">
+  <library name="Gradle: com.tencent.bugly:crashreport_upgrade:1.5.23@aar">
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/d45023392b97f5f1cf603a2b96da179f/jars/classes.jar!/" />
+      <root url="file://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/d45023392b97f5f1cf603a2b96da179f/res" />
+      <root url="file://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/d45023392b97f5f1cf603a2b96da179f/AndroidManifest.xml" />
+      <root url="jar://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/d45023392b97f5f1cf603a2b96da179f/jars/libs/r-classes.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.tencent.bugly/crashreport_upgrade/1.5.23/6a6a736094f82a2384f39f6f094fecc9f533989f/crashreport_upgrade-1.5.23-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.tencent.bugly/crashreport_upgrade/1.5.23/6a6a736094f82a2384f39f6f094fecc9f533989f/crashreport_upgrade-1.5.23-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

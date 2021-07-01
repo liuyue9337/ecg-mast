@@ -55,6 +55,8 @@
     <orderEntry type="library" name="Gradle: com.jakewharton:butterknife:8.8.1@aar" level="project" />
     <orderEntry type="library" name="Gradle: com.android.support:recyclerview-v7:27.1.1@aar" level="project" />
     <orderEntry type="library" name="Gradle: com.android.support:support-v4:27.1.1@aar" level="project" />
+    <orderEntry type="library" name="Gradle: com.tencent.bugly:crashreport_upgrade:1.5.23@aar" level="project" />
+    <orderEntry type="library" name="Gradle: com.tencent.bugly:nativecrashreport:3.9.1@aar" level="project" />
     <orderEntry type="library" name="Gradle: com.android.support:support-fragment:27.1.1@aar" level="project" />
     <orderEntry type="library" name="Gradle: com.android.support:animated-vector-drawable:27.1.1@aar" level="project" />
     <orderEntry type="library" name="Gradle: com.android.support:support-core-ui:27.1.1@aar" level="project" />

@@ -50,6 +50,8 @@ import com.ljfth.ecgviewlib.base.BaseActivity;
 import com.ljfth.ecgviewlib.base.UsbService;
 import com.ljfth.ecgviewlib.utils.PermissionUtils;
 import com.ljfth.ecgviewlib.utils.StringUtils;
+import com.tencent.bugly.beta.Beta;
+import com.tencent.bugly.crashreport.CrashReport;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
@@ -2251,6 +2253,11 @@ public class MainActivity extends BaseActivity implements View.OnTouchListener {
 
         boolean bRet = PermissionUtils.isGrantExternalRW(this,1);
         Log.i("bodystm", "Permission is " + bRet);
+
+        // 监测一次应用是否更新
+        Beta.checkAppUpgrade();
+        // crash test
+//        CrashReport.testJavaCrash();
 
     }
 
